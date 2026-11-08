@@ -1,0 +1,709 @@
+import React, { useState } from 'react';
+import { useApp } from '../../context/AppContext';
+import { VehicleBlueprint } from '../common/VehicleBlueprint';
+import { APP_IMAGES } from '../../assets/images';
+import { 
+  CheckCircle2, 
+  Printer, 
+  FileText, 
+  Clock, 
+  ShieldCheck, 
+  MapPin, 
+  Phone, 
+  Building2, 
+  SlidersHorizontal, 
+  Sparkles, 
+  Thermometer, 
+  Wind,
+  Layers,
+  Calendar,
+  CreditCard,
+  Car
+} from 'lucide-react';
+
+interface CustomerPortalProps {
+  activeSubTab?: string;
+}
+
+export const CustomerPortal: React.FC<CustomerPortalProps> = ({ activeSubTab = 'status' }) => {
+  const { currentUser, jobCards, vehicles, branches, invoices } = useApp();
+
+  // Find customer's jobs (support multiple vehicles if customer has more than 1)
+  const customerJobs = jobCards.filter(j => j.customerId === currentUser?.id);
+  const [selectedJobId, setSelectedJobId] = useState<string>(() => {
+    return customerJobs[0]?.id || jobCards[0]?.id || '';
+  });
+
+  // Sync selectedJobId if currentUser changes
+  React.useEffect(() => {
+    const jobs = jobCards.filter(j => j.customerId === currentUser?.id);
+    if (jobs.length > 0 && !jobs.some(j => j.id === selectedJobId)) {
+      setSelectedJobId(jobs[0].id);
+    } else if (jobs.length === 0 && !jobCards.some(j => j.id === selectedJobId)) {
+      setSelectedJobId(jobCards[0]?.id || '');
+    }
+  }, [currentUser?.id, jobCards]);
+
+  const myJob = jobCards.find(j => j.id === selectedJobId) || customerJobs[0] || jobCards[0];
+  const myVehicle = vehicles.find(v => v.id === myJob?.vehicleId);
+  const myBranch = branches.find(b => b.id === myJob?.branchId);
+  const myInvoice = invoices.find(inv => inv.jobCardId === myJob?.id);
+
+  const [activeView, setActiveView] = useState<'status' | 'blueprint' | 'comparison' | 'invoice'>(
+    (activeSubTab as any) || 'status'
+  );
+
+  React.useEffect(() => {
+    if (activeSubTab && ['status', 'blueprint', 'comparison', 'invoice'].includes(activeSubTab)) {
+      setActiveView(activeSubTab as any);
+    }
+  }, [activeSubTab]);
+
+  // Before & After comparison slider state (0 to 100)
+  const [sliderPosition, setSliderPosition] = useState<number>(50);
+  const [selectedBeforePhoto, setSelectedBeforePhoto] = useState<string | null>(null);
+  const [selectedAfterPhoto, setSelectedAfterPhoto] = useState<string | null>(null);
+
+  // Sample before and after images
+  const beforePhoto = selectedBeforePhoto || myJob?.intakePhotos[0]?.url || APP_IMAGES.beforeDetailing;
+  const afterPhoto = selectedAfterPhoto || myJob?.afterPhotos[0]?.url || APP_IMAGES.afterDetailing;
+
+  const handlePrintInvoice = () => {
+    window.print();
+  };
+
+  const getStatusStep = (status: string) => {
+    switch (status) {
+      case 'ASSIGNED': return 1;
+      case 'IN_INSPECTION': return 2;
+      case 'IN_PROGRESS': return 3;
+      case 'QUALITY_CHECK': return 4;
+      case 'COMPLETED':
+      case 'DELIVERED': return 5;
+      default: return 1;
+    }
+  };
+
+  const currentStep = getStatusStep(myJob?.status || 'ASSIGNED');
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      
+      {/* Customer Welcome Card */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs no-print flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
+              Client Portal
+            </span>
+            <span className="text-xs text-slate-400">·</span>
+            <span className="text-xs text-slate-500 font-mono">
+              QID: {currentUser?.qid || '29463401234'}
+            </span>
+          </div>
+          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mt-1">
+            Welcome, {currentUser?.name || 'Khalid Al-Sulaiti'}
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Service Report for <span className="font-semibold text-slate-800">{myVehicle?.year} {myVehicle?.make} {myVehicle?.model}</span> (Plate: {myVehicle?.plateNumber})
+          </p>
+
+          {/* Multi-vehicle switcher if customer has more than 1 vehicle enrolled */}
+          {customerJobs.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 mt-3 pt-3 border-t border-slate-100">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Your Vehicles:</span>
+              {customerJobs.map(j => {
+                const v = vehicles.find(x => x.id === j.vehicleId);
+                const isSel = j.id === myJob?.id;
+                return (
+                  <button
+                    key={j.id}
+                    type="button"
+                    onClick={() => setSelectedJobId(j.id)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all shrink-0 cursor-pointer ${
+                      isSel
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs font-bold'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span>{v?.year} {v?.make} {v?.model}</span>
+                    <span className="text-[10px] ml-1.5 opacity-80 font-mono">({v?.plateNumber})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* View Switcher Tabs (Mobile Scrollable) */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto w-full sm:w-auto scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveView('status')}
+            className={`px-3 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-h-[40px] flex items-center justify-center ${
+              activeView === 'status' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('comparison')}
+            className={`px-3 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-h-[40px] flex items-center justify-center ${
+              activeView === 'comparison' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Before &amp; After
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('blueprint')}
+            className={`px-3 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-h-[40px] flex items-center justify-center ${
+              activeView === 'blueprint' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Damage Map
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('invoice')}
+            className={`px-3 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-h-[40px] flex items-center justify-center ${
+              activeView === 'invoice' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Digital Invoice
+          </button>
+        </div>
+      </div>
+
+      {/* VIEW 1: OVERVIEW & STATUS TIMELINE */}
+      {activeView === 'status' && (
+        <div className="space-y-6 no-print">
+          
+          {/* Customer Vehicle Picture Showcase Banner */}
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 shadow-sm bg-slate-950 text-white min-h-[140px] flex items-center">
+            <div className="absolute inset-0 z-0 select-none">
+              <img
+                src={APP_IMAGES.heroDetailing}
+                alt="Enrolled Luxury Vehicle"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover object-center filter brightness-[0.45] contrast-[1.12]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
+            </div>
+            <div className="relative z-10 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between w-full gap-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/25 text-blue-300 text-[11px] font-bold border border-blue-400/30 mb-1.5 backdrop-blur-md">
+                  <Car className="w-3.5 h-3.5" />
+                  <span>VIP Detailing Enrolled</span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+                  {myVehicle?.year} {myVehicle?.make} {myVehicle?.model}
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Package: <span className="font-semibold text-white">{myJob?.servicePackage}</span> · Colour: <span className="text-slate-200">{myVehicle?.color}</span>
+                </p>
+              </div>
+              <div className="bg-slate-900/80 backdrop-blur-md border border-white/15 px-4 py-2.5 rounded-xl text-left sm:text-right self-start sm:self-auto shadow-md">
+                <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Qatar Registration</span>
+                <span className="font-mono font-extrabold text-white text-base tracking-wide">
+                  {myVehicle?.plateNumber}
+                </span>
+                <span className="text-[10px] text-blue-300 block font-semibold">({myVehicle?.plateType})</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Real-Time Live Status Tracker */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Live Detailing Progression</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Job Reference: <span className="font-mono font-semibold">{myJob?.jobNumber}</span></p>
+              </div>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 self-start sm:self-auto">
+                {myJob?.status === 'COMPLETED' || myJob?.status === 'DELIVERED' ? 'Ready for Pickup' : 'Service in Progress'}
+              </span>
+            </div>
+
+            {/* Stepper Bar */}
+            <div className="mt-8 relative px-2">
+              <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-100 -translate-y-1/2 z-0" />
+              <div
+                className="absolute top-1/2 left-0 h-1 bg-blue-600 -translate-y-1/2 z-0 transition-all duration-500"
+                style={{ width: `${((currentStep - 1) / 4) * 100}%` }}
+              />
+
+              <div className="relative z-10 flex justify-between">
+                {[
+                  { step: 1, label: 'Intake', fullLabel: 'Intake Accepted', desc: 'Registered in Bay' },
+                  { step: 2, label: 'Inspect', fullLabel: 'Body Inspection', desc: 'Blueprint & Photos' },
+                  { step: 3, label: 'Detail', fullLabel: 'Precision Detailing', desc: 'Compound & Polish' },
+                  { step: 4, label: 'Quality', fullLabel: 'Quality Verification', desc: 'Gloss Audit' },
+                  { step: 5, label: 'Pickup', fullLabel: 'Ready for Pickup', desc: 'Finalized & Cleaned' },
+                ].map((s) => {
+                  const isDone = currentStep >= s.step;
+                  const isCurrent = currentStep === s.step;
+                  return (
+                    <div key={s.step} className="flex flex-col items-center text-center max-w-[65px] sm:max-w-[100px]">
+                      <div
+                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[11px] sm:text-xs font-bold transition-all ${
+                          isDone
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                            : 'bg-white border-2 border-slate-200 text-slate-400'
+                        }`}
+                      >
+                        {isDone ? <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : s.step}
+                      </div>
+                      <span className={`text-[10px] sm:text-xs font-bold mt-1.5 sm:mt-2 line-clamp-1 ${isCurrent ? 'text-blue-600' : 'text-slate-800'}`}>
+                        <span className="sm:hidden">{s.label}</span>
+                        <span className="hidden sm:inline">{s.fullLabel}</span>
+                      </span>
+                      <span className="text-[9px] text-slate-400 mt-0.5 hidden md:block">
+                        {s.desc}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Branch Concierge Location Box */}
+            <div className="mt-8 p-4 bg-slate-50 border border-slate-100 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="flex items-start gap-2.5">
+                <Building2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 block">{myBranch?.name}</span>
+                  <span className="text-slate-500">{myBranch?.address}</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <Phone className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 block">Workshop Concierge</span>
+                  <span className="text-slate-500">{myBranch?.phone} (Direct WhatsApp)</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 block">5-Year Ceramic Warranty</span>
+                  <span className="text-slate-500">Includes complimentary 6-month inspection booster</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Technician Advice & Regional Diagnostics Summary */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Technician Advice */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Technician Maintenance Advice for Qatar Conditions
+                </h3>
+              </div>
+              <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100 text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+                {myJob?.technicianSuggestions || 
+                  '• Apply Graphene ceramic booster spray every 6 months to sustain 110° hydrophobic contact angle.\n' +
+                  '• Avoid automatic gas-station roller brush washes; use touchless pH-neutral shampoo only.\n' +
+                  '• Cabin AC micro-filter inspected and cleaned to resist desert sand ingestion.'}
+              </div>
+              {myJob?.complaintsFound && (
+                <div className="text-xs">
+                  <span className="font-semibold text-slate-700 block mb-1">Workshop Observations Handled:</span>
+                  <p className="text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    {myJob.complaintsFound}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Qatar Environmental Diagnostic Readouts */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                <Thermometer className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Vehicle Environmental Diagnostics
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block font-medium">AC Vent Airflow Temp</span>
+                  <span className="text-base font-bold font-mono text-blue-600">
+                    {myJob?.diagnostics.acVentTempCelsius || 7.2}°C
+                  </span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Optimal Cooling</span>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block font-medium">Desert Sand Ingress</span>
+                  <span className="text-base font-bold text-slate-900">
+                    {myJob?.diagnostics.sandIntakeLevel || 'MINIMAL'}
+                  </span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Intake Cleaned</span>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block font-medium">Average Paint Depth</span>
+                  <span className="text-base font-bold font-mono text-purple-600">
+                    {myJob?.diagnostics.paintDepthMicrons.hood || 118} µm
+                  </span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Factory Clear-Coat Safe</span>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block font-medium">Battery Voltage</span>
+                  <span className="text-base font-bold font-mono text-emerald-600">
+                    {myJob?.diagnostics.batteryVoltage || 12.6} V
+                  </span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Healthy Resting Level</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* VIEW 2: INTERACTIVE BEFORE & AFTER COMPARISON */}
+      {activeView === 'comparison' && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-6 no-print">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Interactive Before &amp; After Detailing Comparison
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Drag the interactive slider below to inspect swirl removal and ceramic mirror reflection.
+              </p>
+            </div>
+            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">
+              High-Resolution Detailing Inspection
+            </span>
+          </div>
+
+          {/* Interactive Split View Slider */}
+          <div className="relative w-full max-w-4xl mx-auto aspect-16/9 bg-slate-900 rounded-xl overflow-hidden select-none shadow-md">
+            {/* After Image (Full background) */}
+            <img
+              src={afterPhoto}
+              alt="After Detailing Finish"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute top-4 right-4 bg-emerald-600/90 text-white font-bold text-xs px-2.5 py-1 rounded-md shadow-xs pointer-events-none">
+              AFTER: 9H Mirror Ceramic Finish
+            </div>
+
+            {/* Before Image (Clipped smoothly with CSS clipPath) */}
+            <img
+              src={beforePhoto}
+              alt="Before Detailing Condition"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+            />
+            {sliderPosition > 15 && (
+              <div className="absolute top-4 left-4 bg-slate-900/80 text-white font-bold text-xs px-2.5 py-1 rounded-md shadow-xs pointer-events-none">
+                BEFORE: Desert Dust &amp; Swirl Marks
+              </div>
+            )}
+
+            {/* Divider Line */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.8)] pointer-events-none"
+              style={{ left: `${sliderPosition}%` }}
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white border-2 border-slate-700 shadow-md flex items-center justify-center">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-800" />
+              </div>
+            </div>
+
+            {/* Invisible Range Input for Draggable Scrubbing */}
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={sliderPosition}
+              onChange={(e) => setSliderPosition(Number(e.target.value))}
+              style={{ touchAction: 'none' }}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-20"
+              aria-label="Before and after comparison slider"
+            />
+          </div>
+
+          {/* Mobile-Friendly Slider Preset Controls */}
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setSliderPosition(0)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors min-h-[36px] ${
+                sliderPosition === 0 ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              Show Full Before
+            </button>
+            <button
+              type="button"
+              onClick={() => setSliderPosition(50)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors min-h-[36px] ${
+                sliderPosition === 50 ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              50/50 Split View
+            </button>
+            <button
+              type="button"
+              onClick={() => setSliderPosition(100)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors min-h-[36px] ${
+                sliderPosition === 100 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              Show Full After
+            </button>
+          </div>
+
+          <div className="text-center text-xs text-slate-500">
+            Slide horizontally across the image or tap presets above to inspect 100% paint correction and ceramic gloss.
+          </div>
+
+          {/* Before & After Photo Gallery */}
+          <div className="pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold text-slate-800">All Intake vs. Completion Documentation Photos</h4>
+              <span className="text-[10px] text-blue-600 font-medium">Click any photo to compare in slider above</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {myJob?.intakePhotos.slice(0, 4).map((p) => {
+                const isCurrent = beforePhoto === p.url;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedBeforePhoto(p.url);
+                      setSliderPosition(50);
+                    }}
+                    className={`group relative rounded-lg overflow-hidden border text-left cursor-pointer transition-all ${
+                      isCurrent ? 'ring-2 ring-blue-600 border-blue-600' : 'border-slate-200 hover:border-slate-400'
+                    }`}
+                  >
+                    <img src={p.url} alt={p.slotLabel} className="aspect-4/3 w-full object-cover" />
+                    <div className="p-2 bg-white text-[11px]">
+                      <span className="font-bold text-slate-800 block truncate">{p.slotLabel}</span>
+                      <span className="text-slate-500 font-semibold text-[10px]">Before Detailing</span>
+                    </div>
+                  </button>
+                );
+              })}
+              {myJob?.afterPhotos.slice(0, 4).map((p) => {
+                const isCurrent = afterPhoto === p.url;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAfterPhoto(p.url);
+                      setSliderPosition(50);
+                    }}
+                    className={`group relative rounded-lg overflow-hidden border text-left cursor-pointer transition-all ${
+                      isCurrent ? 'ring-2 ring-emerald-600 border-emerald-600' : 'border-emerald-200 hover:border-emerald-400'
+                    }`}
+                  >
+                    <img src={p.url} alt={p.slotLabel} className="aspect-4/3 w-full object-cover" />
+                    <div className="p-2 bg-emerald-50/50 text-[11px]">
+                      <span className="font-bold text-emerald-900 block truncate">{p.slotLabel}</span>
+                      <span className="text-emerald-700 font-semibold text-[10px]">After Detailing</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* VIEW 3: DAMAGE BLUEPRINT MAP */}
+      {activeView === 'blueprint' && (
+        <div className="space-y-4 no-print">
+          <VehicleBlueprint marks={myJob?.damageMarks || []} readOnly={true} />
+        </div>
+      )}
+
+      {/* VIEW 4: DIGITAL QATAR TAX INVOICE */}
+      {activeView === 'invoice' && (() => {
+        const subtotalQAR = myInvoice?.subtotalQAR ?? myJob?.packagePriceQAR ?? 0;
+        const discountQAR = myInvoice?.discountQAR ?? myJob?.discountQAR ?? 0;
+        const totalQAR = myInvoice?.totalQAR ?? myJob?.finalPriceQAR ?? Math.max(0, subtotalQAR - discountQAR);
+        const invoiceNumber = myInvoice?.invoiceNumber || (myJob?.jobNumber ? `INV-${myJob.jobNumber.replace('QP-', '')}` : 'INV-QP-4091');
+        const invoiceDate = myInvoice?.date || (myJob?.createdAt ? myJob.createdAt.split('T')[0] : '2026-03-28');
+        const items = myInvoice?.items && myInvoice.items.length > 0
+          ? myInvoice.items
+          : [
+              {
+                id: 'item-base',
+                description: myJob?.servicePackage || 'Premium Auto Detailing & Ceramic Protection',
+                quantity: 1,
+                unitPriceQAR: subtotalQAR,
+                totalQAR: subtotalQAR,
+              }
+            ];
+
+        return (
+          <div className="space-y-4">
+            
+            {/* Print Action Bar */}
+            <div className="flex items-center justify-between no-print">
+              <p className="text-xs text-slate-500">
+                Official Digital Tax Invoice issued by Q Planet Car Care W.L.L. (State of Qatar)
+              </p>
+              <button
+                type="button"
+                onClick={handlePrintInvoice}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-lg shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-blue-600" />
+                <span>Print Official Invoice / Save PDF</span>
+              </button>
+            </div>
+
+            {/* Printable Invoice Container */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 shadow-sm max-w-3xl mx-auto print:border-none print:shadow-none print:p-0">
+              
+              {/* Invoice Header */}
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between pb-8 border-b border-slate-200 gap-4">
+                <div>
+                  <h1 className="text-2xl font-black text-slate-900 tracking-tight">Q PLANET</h1>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mt-0.5">
+                    Automotive Detailing &amp; Ceramic Technology W.L.L.
+                  </p>
+                  <div className="mt-3 text-xs text-slate-600 space-y-0.5">
+                    <p>{myBranch?.name}</p>
+                    <p>{myBranch?.address}</p>
+                    <p>State of Qatar · Tel: {myBranch?.phone}</p>
+                    <p className="font-mono text-slate-500">CR No: {myBranch?.crNumber}</p>
+                  </div>
+                </div>
+
+                <div className="sm:text-right">
+                  <span className={`text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wide inline-block mb-2 ${
+                    myJob?.status === 'DELIVERED'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : myJob?.status === 'COMPLETED'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {myJob?.status === 'DELIVERED' ? 'TAX INVOICE / PAID' : myJob?.status === 'COMPLETED' ? 'COMPLETED / READY FOR SETTLEMENT' : 'ESTIMATE & WORK ORDER'}
+                  </span>
+                  <p className="text-sm font-bold font-mono text-slate-900">
+                    {invoiceNumber}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Date: {invoiceDate}</p>
+                  <p className="text-xs text-slate-500 font-mono">Job Ref: {myJob?.jobNumber}</p>
+                </div>
+              </div>
+
+              {/* Bill To & Vehicle Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-6 border-b border-slate-100 text-xs">
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider block mb-1">Bill To Client</span>
+                  <p className="text-sm font-bold text-slate-900">{currentUser?.name}</p>
+                  <p className="text-slate-600">{currentUser?.profession}</p>
+                  <p className="font-mono text-slate-600 mt-0.5">Qatar ID: {currentUser?.qid}</p>
+                  <p className="font-mono text-slate-600">Mobile: {currentUser?.phone}</p>
+                </div>
+
+                <div className="sm:text-right">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider block mb-1">Vehicle Specification</span>
+                  <p className="text-sm font-bold text-slate-900">{myVehicle?.year} {myVehicle?.make} {myVehicle?.model}</p>
+                  <p className="text-slate-600">Colour: {myVehicle?.color}</p>
+                  <p className="font-mono font-bold text-slate-900 mt-0.5">
+                    Qatar Plate: {myVehicle?.plateNumber} ({myVehicle?.plateType})
+                  </p>
+                  <p className="font-mono text-slate-400 text-[11px]">VIN: {myVehicle?.vinNumber || 'WP0AB2A99PS129481'}</p>
+                </div>
+              </div>
+
+              {/* Itemized Line Items Table */}
+              <div className="py-6">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 uppercase font-semibold text-[11px]">
+                      <th className="py-2.5">Service Description</th>
+                      <th className="py-2.5 text-center">Qty</th>
+                      <th className="py-2.5 text-right">Unit Price (QAR)</th>
+                      <th className="py-2.5 text-right">Total (QAR)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {items.map((item) => (
+                      <tr key={item.id} className="text-slate-800">
+                        <td className="py-3 font-medium">{item.description}</td>
+                        <td className="py-3 text-center font-mono">{item.quantity}</td>
+                        <td className="py-3 text-right font-mono tabular-nums">{item.unitPriceQAR.toLocaleString()}</td>
+                        <td className="py-3 text-right font-bold font-mono tabular-nums">{item.totalQAR.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Invoice Totals */}
+              <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-start justify-between gap-6 text-xs">
+                <div className="space-y-1 text-slate-500 max-w-sm">
+                  <p className="font-semibold text-slate-800">Payment Information:</p>
+                  <p>Settled via Qatar Central Bank NAPS Gateway · Card Auth Code #840921</p>
+                  <p className="text-[11px]">All detailing coatings backed by Q Planet 5-Year Nationwide Warranty.</p>
+                </div>
+
+                <div className="w-full sm:w-64 space-y-2">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Subtotal:</span>
+                    <span className="font-mono font-medium tabular-nums">{subtotalQAR.toLocaleString()} QAR</span>
+                  </div>
+                  {discountQAR > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-semibold">
+                      <span>Loyalty Courtesy Discount:</span>
+                      <span className="font-mono tabular-nums">-{discountQAR.toLocaleString()} QAR</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-600">
+                    <span>Applicable Qatar Tax / VAT:</span>
+                    <span className="font-mono">0.00 QAR (0%)</span>
+                  </div>
+                  <div className="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200">
+                    <span>Total Amount:</span>
+                    <span className="font-mono text-blue-600 tabular-nums">{totalQAR.toLocaleString()} QAR</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Official Stamp & QR Code representation */}
+              <div className="mt-12 pt-6 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 text-[8px] font-mono text-center">
+                    [QATAR TAX DIGITAL QR]
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-700">Electronically Verified Tax Document</p>
+                    <p>Ministry of Commerce &amp; Industry (State of Qatar)</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-slate-800">Q Planet Auto Care W.L.L.</p>
+                  <p>Authorized Quality Seal</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+    </div>
+  );
+};

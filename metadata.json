@@ -1,0 +1,8 @@
+{
+  "name": "Remix Q Planet Auto Manager",
+  "description": "A professional, multi-branch SaaS platform for managing auto detailing workflows, technician tracking, and automated customer communication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
